@@ -33,6 +33,12 @@ static const int MOTION_DOWN = 2;
 static const int MOTION_RIGHT = 4;
 static const int MOTION_LEFT = 8;
 
+static const int CHECK_FLOOR = TILE_SIZE - (HEIGHT/2 + PLAYER_HEIGHT/2);   // 84
+static const int CHECK_CEILING = TILE_SIZE - (HEIGHT/2 - PLAYER_HEIGHT/2); // 108
+static const int CHECK_OFFSET = TILE_SIZE - (WIDTH/2 - PLAYER_WIDTH/2);
+static const int CHECK_BUFFER = 8;
+
+// Remove once collision checking is working
 static const int MAX_X = (MAP_WIDTH-1)*TILE_SIZE;
 static const int MAX_Y = (MAP_HEIGHT-1)*TILE_SIZE;
   
@@ -65,7 +71,7 @@ void loop() {
   if (!(arduboy.nextFrame()))
     return;
 
-  arduboy.pollButtons();
+  //arduboy.pollButtons();
 
   // Move character
 
@@ -107,20 +113,33 @@ void loop() {
   arduboy.print(player_x);
   arduboy.setCursor(56, 0);
   arduboy.print(player_y);
-//  arduboy.setCursor(8*14, 28);
-  //arduboy.print(collision);
+  arduboy.setCursor(8*14, 28);
+  arduboy.print(collision);
   
 //  Display results
   
   arduboy.display();
 }
 
+// Player coordinate is for the upper-left corner of the screen,
+// so must offset for detection
+
+// coordinate 0: floor = 64/2+24/2 = 32+12 = 44
+// So want to check when player = 128 - 44 = 84
+
 void detectCollisions(Tile tiles[4]) {
-  if (player_y == MAX_Y) {
-    collision = COLLISION_FLOOR;
+  uint8_t delx = player_x & (TILE_SIZE-1);
+  uint8_t dely = player_y & (TILE_SIZE-1);
+  bool    offset = delx >= CHECK_OFFSET;
+  collision = 0;  
+
+  if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER) && (tiles[2+offset] != Tile::empty)) {
+    collision |= COLLISION_FLOOR;
+    player_y = (player_y & ~0x7f) + CHECK_FLOOR;
   }
-  else {
-    collision = COLLISION_NONE;
+  else if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && (tiles[0+offset] != Tile::empty)) {
+    collision = COLLISION_CEILING;
+    player_y = (player_y & ~0x7f) + CHECK_CEILING;
   }
 }
 
@@ -161,9 +180,12 @@ void move() {
     flySound();
     motion_y = max(motion_y-1,-MAX_MOTION);
   }
-  else if (!collision & COLLISION_FLOOR) {
+  else if (!(collision & COLLISION_FLOOR)) {
     motion |= MOTION_DOWN;  
     motion_y = min(motion_y+1,MAX_MOTION);
+  }
+  else {
+    motion_y = 0;
   }
   
   player_x += motion_x;
@@ -233,15 +255,6 @@ void drawWalls(Tile tiles[4]) {
       arduboy.sBuffer[x+y*16] = bits;
     }
   }
-
-  arduboy.setCursor(0, 7*8);
-  arduboy.print(yswitch);
-  arduboy.print(",");
-  arduboy.print(dely);
-  arduboy.print(",");
-  arduboy.print(static_cast<uint8_t>(tiles[0]));
-  arduboy.print(",");
-  arduboy.print(static_cast<uint8_t>(tiles[2]));
 }
 
 void drawPlayer() {

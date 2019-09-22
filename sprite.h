@@ -1,5 +1,8 @@
 // Sprite Data
 
+static const int PLAYER_HEIGHT = 24;
+static const int PLAYER_WIDTH = 16;
+
 const unsigned char PROGMEM lrm_plus_mask[] =
 {
 // width, height,
