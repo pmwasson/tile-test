@@ -15,19 +15,35 @@ Arduboy2 arduboy;
 Sprites  sprites;
 ArduboyTones sound(arduboy.audio.enabled);
 
-enum  : char {
-  COLLISION_NONE = 0,
-  COLLISION_GROUND = 1,
-  COLLISION_CEILING = 2,
-  COLLISION_RIGHT = 4,
-  COLLISION_LEFT = 8
-};
+// Constants
 
+static const int MAX_MOTION = 5;
+static const int MAX_FLOOR_MOTION = 2;
+
+static const int COLLISION_NONE = 0;
+static const int COLLISION_FLOOR = 1;
+static const int COLLISION_CEILING = 2;
+static const int COLLISION_RIGHT = 4;
+static const int COLLISION_LEFT = 8;
+static const int COLLISION_SLANT = 8;
+
+static const int MOTION_NONE = 0;
+static const int MOTION_UP = 1;
+static const int MOTION_DOWN = 2;
+static const int MOTION_RIGHT = 4;
+static const int MOTION_LEFT = 8;
+
+static const int MAX_X = (MAP_WIDTH-1)*TILE_SIZE;
+static const int MAX_Y = (MAP_HEIGHT-1)*TILE_SIZE;
+  
 // Globals
 
-int player_x;
-int player_y;
-uint16_t background = 0;
+int     player_x;
+int     player_y;
+int8_t  motion_x;
+int8_t  motion_y;
+uint8_t collision;
+uint8_t motion;
 
 // Setup
 void setup() {
@@ -35,9 +51,12 @@ void setup() {
   arduboy.begin();
   arduboy.setFrameRate(60);
 
-  player_x = 0;
-  player_y = 255;
-  background = 0;
+  player_x = START_X;
+  player_y = START_Y;
+  motion_x = 0;
+  motion_y = 0;
+  collision = COLLISION_NONE;
+  motion = MOTION_NONE;
 }
 
 // Game loop
@@ -50,7 +69,7 @@ void loop() {
 
   // Move character
 
-  move(0);
+  move();
     
   // Read map data
   
@@ -63,17 +82,15 @@ void loop() {
     static_cast<Tile>(pgm_read_byte(tile_map+map_pos+MAP_WIDTH+1))
   };
 
-  //uint8_t collision = detectCollisions(player_x, player_y, tiles);
-  
+  detectCollisions(tiles);
 
-  
   //----------------------
   // Render
   //----------------------
 
   // Draw walls draws write the whole buffer, so no
   // clear is needed.
-  drawWalls(player_x&0x7f, player_y&0x7f, tiles);
+  drawWalls(tiles);
 
   // Draw background
 
@@ -83,11 +100,11 @@ void loop() {
   // Draw player
   
   // Draw in center of screen
-  sprites.drawPlusMask((WIDTH/2)-(16/2),(HEIGHT/2)-(24/2),lrm_plus_mask,0);
-
+  drawPlayer();
+  
   // Debug
-//  arduboy.setCursor(0, 28);
-//  arduboy.print(player_x);
+  arduboy.setCursor(0, 28);
+  arduboy.print(player_x);
   arduboy.setCursor(56, 0);
   arduboy.print(player_y);
 //  arduboy.setCursor(8*14, 28);
@@ -98,54 +115,80 @@ void loop() {
   arduboy.display();
 }
 
-uint8_t detectCollisions(int delx, int dely, Tile tiles[4]) {
-
-  return COLLISION_NONE;
+void detectCollisions(Tile tiles[4]) {
+  if (player_y == MAX_Y) {
+    collision = COLLISION_FLOOR;
+  }
+  else {
+    collision = COLLISION_NONE;
+  }
 }
 
 // Character movement
-void move(uint8_t collision) {
-  const int MAX_X = (MAP_WIDTH-1)*TILE_SIZE;
-  const int MAX_Y = (MAP_HEIGHT-1)*TILE_SIZE;
-  int del_x = 0;
-  int del_y = 0;
+void move() {
+  motion = 0;
   
   if (arduboy.pressed(RIGHT_BUTTON)) {
-    if (player_x >= MAX_X) {
-      player_x = MAX_X;
-    }
-    else {
-      del_x = 1;
-    }
-  }
-  if (arduboy.pressed(LEFT_BUTTON)) {
-    if (player_x <= 0) {
-      player_x = 0;
-    }
-    else {
-      del_x = -1;
+    motion |= MOTION_RIGHT;  
+    if (!(collision & COLLISION_RIGHT)) {
+      if (collision & COLLISION_FLOOR) {
+        motion_x = min(motion_x+1,MAX_FLOOR_MOTION);
+        walkSound(); 
+      }
+      else {
+        motion_x = min(motion_x+1,MAX_MOTION);
+      }
     }
   }
-  if (arduboy.pressed(DOWN_BUTTON)) {
-    if (player_y >= MAX_Y) {
-      player_y = MAX_Y;
-    }
-    else {
-      del_y = 1;
-    }
-  }
-  if (arduboy.pressed(UP_BUTTON)) {
-    if (player_y <= 0) {
-      player_y = 0;
-    }
-    else {
-      del_y = -1;
+  else if (arduboy.pressed(LEFT_BUTTON)) {
+    motion |= MOTION_LEFT;  
+    if (!(collision & COLLISION_LEFT)) {
+      if (collision & COLLISION_FLOOR) {
+        motion_x = max(motion_x-1,-MAX_FLOOR_MOTION);
+        walkSound(); 
+      }
+      else {
+        motion_x = max(motion_x-1,-MAX_MOTION);
+      }
     }
   }
-  player_x += del_x;
-  player_y += del_y;
-  background += (del_y<<8) - del_x;
+  else if (collision & COLLISION_FLOOR) {
+    motion_x = 0;
+  }
+  
+  if (arduboy.pressed(B_BUTTON)) {
+    motion |= MOTION_UP;  
+    flySound();
+    motion_y = max(motion_y-1,-MAX_MOTION);
+  }
+  else if (!collision & COLLISION_FLOOR) {
+    motion |= MOTION_DOWN;  
+    motion_y = min(motion_y+1,MAX_MOTION);
+  }
+  
+  player_x += motion_x;
+  if (player_x <= 0) {
+    player_x = 0;
+    motion_x = 0;
+  }
+  else if (player_x > MAX_X) {
+    player_x = MAX_X;
+    motion_x = 0;
+  }
+
+  player_y += motion_y;
+  if (player_y <= 0) {
+    player_y = 0;
+    motion_y = 0;
+  }
+  else if (player_y > MAX_Y) {
+    player_y = MAX_Y;
+    motion_y = 0;
+  }
 }
+
+// Drawing
+//---------------------------
 
 // Calculate bits based on location within tile
 uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
@@ -173,7 +216,9 @@ uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
 // 0 1
 // 2 3
 
-void drawWalls(int delx, int dely, Tile tiles[4]) {
+void drawWalls(Tile tiles[4]) {
+  uint8_t delx = player_x & (TILE_SIZE-1);
+  uint8_t dely = player_y & (TILE_SIZE-1);
   int xswitch = 128-delx;
   int yswitch = 128-dely;
   for (int y=0; y < 64; y += 8) {
@@ -199,10 +244,41 @@ void drawWalls(int delx, int dely, Tile tiles[4]) {
   arduboy.print(static_cast<uint8_t>(tiles[2]));
 }
 
+void drawPlayer() {
+  uint8_t frame = 0;
+  uint8_t animation = arduboy.frameCount>>2&1;
+  if (collision & COLLISION_FLOOR) {
+    if (motion & (MOTION_RIGHT | MOTION_LEFT)) {
+      frame = 0+animation;
+    }
+  }
+  else {
+    if (motion & MOTION_UP) {
+      frame = 2+animation;
+    }
+  }
+  sprites.drawPlusMask((WIDTH/2)-(16/2),(HEIGHT/2)-(24/2),lrm_plus_mask,frame);
+}
+
 void drawStars(uint16_t seed, uint8_t layer) {
-  background = -((player_y >> layer) << 7) - (player_x >> layer);
+  uint16_t background = -((player_y >> layer) << 7) - (player_x >> layer);
   for(uint16_t i=0; i < WIDTH*HEIGHT; i+=seed) {
     background += seed;
     arduboy.drawPixel (background & 0x7f, (background >> 7) & 0x3f, WHITE);
+  }
+}
+
+// Sounds
+//-------------------------------------------
+
+void walkSound() {
+  if (!sound.playing()) {
+    sound.tone(NOTE_C3,100, NOTE_REST,80);
+  }
+}
+
+void flySound() {
+  if (!sound.playing()) {
+    sound.tone(NOTE_C2H,60, NOTE_A2H,30); 
   }
 }
