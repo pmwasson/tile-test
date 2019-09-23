@@ -18,7 +18,7 @@ ArduboyTones sound(arduboy.audio.enabled);
 // Constants
 
 static const int MAX_MOTION = 5;
-static const int MAX_FLOOR_MOTION = 2;
+static const int MAX_FLOOR_MOTION = 1;
 
 static const int COLLISION_NONE = 0;
 static const int COLLISION_FLOOR = 1;
@@ -35,7 +35,11 @@ static const int MOTION_LEFT = 8;
 
 static const int CHECK_FLOOR = TILE_SIZE - (HEIGHT/2 + PLAYER_HEIGHT/2);   // 84
 static const int CHECK_CEILING = TILE_SIZE - (HEIGHT/2 - PLAYER_HEIGHT/2); // 108
-static const int CHECK_OFFSET = TILE_SIZE - (WIDTH/2 - PLAYER_WIDTH/2);
+static const int CHECK_LEFT = (WIDTH/2 + PLAYER_WIDTH/2); // 72
+static const int CHECK_RIGHT = (WIDTH/2 - PLAYER_WIDTH/2); // 56
+
+static const int CHECK_OFFSET_RIGHT = TILE_SIZE - (WIDTH/2 - PLAYER_WIDTH/2);
+static const int CHECK_OFFSET_LEFT = TILE_SIZE - (WIDTH/2 + PLAYER_WIDTH/2);
 static const int CHECK_BUFFER = 8;
 
 // Remove once collision checking is working
@@ -110,9 +114,13 @@ void loop() {
   
   // Debug
   arduboy.setCursor(0, 28);
-  arduboy.print(player_x);
+  arduboy.print(player_x&0x7f);
+  arduboy.print(",");
+  arduboy.print(motion_x);
   arduboy.setCursor(56, 0);
-  arduboy.print(player_y);
+  arduboy.print(player_y&0x7f);
+  arduboy.print(",");
+  arduboy.print(motion_y);
   arduboy.setCursor(8*14, 28);
   arduboy.print(collision);
   
@@ -130,18 +138,53 @@ void loop() {
 void detectCollisions(Tile tiles[4]) {
   uint8_t delx = player_x & (TILE_SIZE-1);
   uint8_t dely = player_y & (TILE_SIZE-1);
-  bool    offset = delx >= CHECK_OFFSET;
-  collision = 0;  
 
-  if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER) && (tiles[2+offset] != Tile::empty)) {
+  collision = 0;  
+  
+  // Flat floor
+  if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER)  &&  
+     (((delx < CHECK_OFFSET_RIGHT) && (tiles[2] != Tile::empty))  ||
+      ((delx > CHECK_OFFSET_LEFT)  && (tiles[3] != Tile::empty)))) {
     collision |= COLLISION_FLOOR;
     player_y = (player_y & ~0x7f) + CHECK_FLOOR;
+    motion_y = 0;
   }
-  else if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && (tiles[0+offset] != Tile::empty)) {
-    collision = COLLISION_CEILING;
+  // Flat ceiling
+  if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && 
+     (((delx < CHECK_OFFSET_RIGHT) && (tiles[0] != Tile::empty))     ||
+      ((delx > CHECK_OFFSET_LEFT)  && (tiles[1] != Tile::empty))))    {
+    collision |= COLLISION_CEILING;
     player_y = (player_y & ~0x7f) + CHECK_CEILING;
+    motion_y = 0;
+  }
+  // Flat Right
+  if ((delx >= CHECK_RIGHT) && (delx < CHECK_RIGHT+CHECK_BUFFER) && 
+      (((dely < CHECK_CEILING) && (tiles[1] != Tile::empty)) ||
+       ((dely > CHECK_FLOOR)   && (tiles[3] != Tile::empty)))) {
+    collision |= COLLISION_RIGHT;
+    player_x = (player_x & ~0x7f) + CHECK_RIGHT;
+    motion_x = 0;
+  }
+  // Flat Left
+  if ((delx <= CHECK_LEFT) && (delx > CHECK_LEFT-CHECK_BUFFER) && 
+      (((dely < CHECK_CEILING) && (tiles[0] != Tile::empty)) ||
+       ((dely > CHECK_FLOOR)   && (tiles[2] != Tile::empty)))) {
+    collision |= COLLISION_LEFT;
+    player_x = (player_x & ~0x7f) + CHECK_LEFT;
+    motion_x = 0;
   }
 }
+
+//uint8_t ceilingCoordinate(Tile tile,uint8_t delx) {
+//  switch (tile) {
+//    case Tile::empty:       return 0;
+//    case Tile::lowerLeft:
+//    case Tile::lowerRight:
+//    case Tile::wall:        return TILE_SIZE - (HEIGHT/2 - PLAYER_HEIGHT/2);
+//    case Tile::upperRight:  return 
+//  }
+//}
+
 
 // Character movement
 void move() {
