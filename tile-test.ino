@@ -224,8 +224,8 @@ void move() {
   }
   else if (collision & COLLISION_FLOOR) {
     if (collision & COLLISION_SLANT) {
-      motion_x = (collision & COLLISION_LEFT) ? min(motion_x+1,MAX_FLOOR_MOTION) : max(motion_x-1,-MAX_FLOOR_MOTION);
-      slideSound(); 
+      motion_x = ((collision & COLLISION_LEFT) ? 1 : 0) + ((collision & COLLISION_RIGHT) ? -1 : 0);
+      if (motion_x) slideSound(); 
     }
     else {
       motion_x = 0;
