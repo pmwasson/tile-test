@@ -18,14 +18,14 @@ ArduboyTones sound(arduboy.audio.enabled);
 // Constants
 
 static const int MAX_MOTION = 5;
-static const int MAX_FLOOR_MOTION = 1;
+static const int MAX_FLOOR_MOTION = 2;
 
 static const int COLLISION_NONE = 0;
 static const int COLLISION_FLOOR = 1;
 static const int COLLISION_CEILING = 2;
 static const int COLLISION_RIGHT = 4;
 static const int COLLISION_LEFT = 8;
-static const int COLLISION_SLANT = 8;
+static const int COLLISION_SLANT = 16;
 
 static const int MOTION_NONE = 0;
 static const int MOTION_UP = 1;
@@ -41,10 +41,6 @@ static const int CHECK_RIGHT = (WIDTH/2 - PLAYER_WIDTH/2); // 56
 static const int CHECK_OFFSET_RIGHT = TILE_SIZE - (WIDTH/2 - PLAYER_WIDTH/2);
 static const int CHECK_OFFSET_LEFT = TILE_SIZE - (WIDTH/2 + PLAYER_WIDTH/2);
 static const int CHECK_BUFFER = 8;
-
-// Remove once collision checking is working
-static const int MAX_X = (MAP_WIDTH-1)*TILE_SIZE;
-static const int MAX_Y = (MAP_HEIGHT-1)*TILE_SIZE;
   
 // Globals
 
@@ -80,7 +76,7 @@ void loop() {
   // Move character
 
   move();
-    
+  
   // Read map data
   
   int map_pos = (player_x >> 7) + (player_y >> 7)*MAP_WIDTH;
@@ -143,56 +139,60 @@ void detectCollisions(Tile tiles[4]) {
   
   // Flat floor
   if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER)  &&  
-     (((delx < CHECK_OFFSET_RIGHT) && (tiles[2] != Tile::empty))  ||
-      ((delx > CHECK_OFFSET_LEFT)  && (tiles[3] != Tile::empty)))) {
+     (((delx < CHECK_OFFSET_RIGHT) && isFloor(tiles[2]))  ||
+      ((delx > CHECK_OFFSET_LEFT)  && isFloor(tiles[3])))) {
     collision |= COLLISION_FLOOR;
     player_y = (player_y & ~0x7f) + CHECK_FLOOR;
+    dely = CHECK_FLOOR;
     motion_y = 0;
   }
   // Flat ceiling
   if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && 
-     (((delx < CHECK_OFFSET_RIGHT) && (tiles[0] != Tile::empty))     ||
-      ((delx > CHECK_OFFSET_LEFT)  && (tiles[1] != Tile::empty))))    {
+     (((delx < CHECK_OFFSET_RIGHT) && isCeiling(tiles[0]))     ||
+      ((delx > CHECK_OFFSET_LEFT)  && isCeiling(tiles[1]))))    {
     collision |= COLLISION_CEILING;
     player_y = (player_y & ~0x7f) + CHECK_CEILING;
+    dely = CHECK_CEILING;
     motion_y = 0;
   }
   // Flat Right
   if ((delx >= CHECK_RIGHT) && (delx < CHECK_RIGHT+CHECK_BUFFER) && 
-      (((dely < CHECK_CEILING) && (tiles[1] != Tile::empty)) ||
-       ((dely > CHECK_FLOOR)   && (tiles[3] != Tile::empty)))) {
+      (((dely < CHECK_CEILING) && isRight(tiles[1])) ||
+       ((dely > CHECK_FLOOR)   && isRight(tiles[3])))) {
     collision |= COLLISION_RIGHT;
     player_x = (player_x & ~0x7f) + CHECK_RIGHT;
+    delx = CHECK_RIGHT;
     motion_x = 0;
   }
   // Flat Left
   if ((delx <= CHECK_LEFT) && (delx > CHECK_LEFT-CHECK_BUFFER) && 
-      (((dely < CHECK_CEILING) && (tiles[0] != Tile::empty)) ||
-       ((dely > CHECK_FLOOR)   && (tiles[2] != Tile::empty)))) {
+      (((dely < CHECK_CEILING) && isLeft(tiles[0])) ||
+       ((dely > CHECK_FLOOR)   && isLeft(tiles[2])))) {
     collision |= COLLISION_LEFT;
     player_x = (player_x & ~0x7f) + CHECK_LEFT;
+    delx = CHECK_LEFT;
+    motion_x = 0;    
+  }
+
+  // Lower Left
+  if (((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx >= CHECK_LEFT) && isLowerLeft(tiles[3])) ||
+      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx - 128) && (delx >= 128-(CHECK_FLOOR-CHECK_LEFT) && isLowerLeft(tiles[1]))) ||
+      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx < CHECK_LEFT) && isLowerLeft(tiles[0]))) {
+    collision |= COLLISION_FLOOR | COLLISION_LEFT | COLLISION_SLANT;
+    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f);
+    dely = (CHECK_FLOOR-CHECK_LEFT) + delx;
+    motion_y = 0;
     motion_x = 0;
   }
 }
-
-//uint8_t ceilingCoordinate(Tile tile,uint8_t delx) {
-//  switch (tile) {
-//    case Tile::empty:       return 0;
-//    case Tile::lowerLeft:
-//    case Tile::lowerRight:
-//    case Tile::wall:        return TILE_SIZE - (HEIGHT/2 - PLAYER_HEIGHT/2);
-//    case Tile::upperRight:  return 
-//  }
-//}
-
 
 // Character movement
 void move() {
   motion = 0;
   
   if (arduboy.pressed(RIGHT_BUTTON)) {
-    motion |= MOTION_RIGHT;  
     if (!(collision & COLLISION_RIGHT)) {
+      motion |= MOTION_RIGHT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = min(motion_x+1,MAX_FLOOR_MOTION);
         walkSound(); 
@@ -203,8 +203,8 @@ void move() {
     }
   }
   else if (arduboy.pressed(LEFT_BUTTON)) {
-    motion |= MOTION_LEFT;  
     if (!(collision & COLLISION_LEFT)) {
+      motion |= MOTION_LEFT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = max(motion_x-1,-MAX_FLOOR_MOTION);
         walkSound(); 
@@ -215,7 +215,13 @@ void move() {
     }
   }
   else if (collision & COLLISION_FLOOR) {
-    motion_x = 0;
+    if (collision & COLLISION_SLANT) {
+      motion_x = (collision & COLLISION_LEFT) ? min(motion_x+1,MAX_FLOOR_MOTION) : max(motion_x-1,-MAX_FLOOR_MOTION);
+      slideSound(); 
+    }
+    else {
+      motion_x = 0;
+    }
   }
   
   if (arduboy.pressed(B_BUTTON)) {
@@ -232,23 +238,23 @@ void move() {
   }
   
   player_x += motion_x;
-  if (player_x <= 0) {
-    player_x = 0;
-    motion_x = 0;
-  }
-  else if (player_x > MAX_X) {
-    player_x = MAX_X;
-    motion_x = 0;
-  }
-
   player_y += motion_y;
+
+  // Wrap around map
+  
+  if (player_x <= 0) {
+    player_x += MAP_WIDTH*TILE_SIZE;
+    motion_x = 0;
+  }
+  else if (player_x >= MAP_WIDTH*TILE_SIZE) {
+    player_x -= MAP_WIDTH*TILE_SIZE;
+  }
   if (player_y <= 0) {
-    player_y = 0;
+    player_y += MAP_HEIGHT*TILE_SIZE;
     motion_y = 0;
   }
-  else if (player_y > MAX_Y) {
-    player_y = MAX_Y;
-    motion_y = 0;
+  else if (player_y > MAP_HEIGHT*TILE_SIZE) {
+    player_y -= MAP_HEIGHT*TILE_SIZE;
   }
 }
 
@@ -336,5 +342,11 @@ void walkSound() {
 void flySound() {
   if (!sound.playing()) {
     sound.tone(NOTE_C2H,60, NOTE_A2H,30); 
+  }
+}
+
+void slideSound() {
+  if (!sound.playing()) {
+    sound.tone(NOTE_D2,30, NOTE_A1,30); 
   }
 }
