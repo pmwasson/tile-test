@@ -71,8 +71,6 @@ void loop() {
   if (!(arduboy.nextFrame()))
     return;
 
-  //arduboy.pollButtons();
-
   // Move character
 
   move();
@@ -87,7 +85,7 @@ void loop() {
     static_cast<Tile>(pgm_read_byte(tile_map+map_pos+MAP_WIDTH)),
     static_cast<Tile>(pgm_read_byte(tile_map+map_pos+MAP_WIDTH+1))
   };
-
+  
   detectCollisions(tiles);
 
   //----------------------
@@ -175,12 +173,22 @@ void detectCollisions(Tile tiles[4]) {
   }
 
   // Lower Left
-  if (((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx >= CHECK_LEFT) && isLowerLeft(tiles[3])) ||
-      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx - 128) && (delx >= 128-(CHECK_FLOOR-CHECK_LEFT) && isLowerLeft(tiles[1]))) ||
+  if (((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx >= CHECK_LEFT) && (delx < 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[3])) ||
+      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx - 128) && (delx >= 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[1])) ||
       ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx < CHECK_LEFT) && isLowerLeft(tiles[0]))) {
     collision |= COLLISION_FLOOR | COLLISION_LEFT | COLLISION_SLANT;
     player_y = (player_y & ~0x7f) + (((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f);
-    dely = (CHECK_FLOOR-CHECK_LEFT) + delx;
+    dely = ((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f;
+    motion_y = 0;
+    motion_x = 0;
+  }
+  // Lower Right
+  if (((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx <= CHECK_RIGHT) && isLowerRight(tiles[2])) ||
+      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - (delx + 128)) && (delx <= (CHECK_FLOOR+CHECK_RIGHT)-128) && isLowerRight(tiles[0])) ||
+      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx > CHECK_RIGHT) && isLowerRight(tiles[1]))) {
+    collision |= COLLISION_FLOOR | COLLISION_RIGHT | COLLISION_SLANT;
+    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR+CHECK_RIGHT) - delx) & 0x7f);
+    dely = ((CHECK_FLOOR-CHECK_LEFT) - delx) & 0x7f;
     motion_y = 0;
     motion_x = 0;
   }
@@ -239,23 +247,6 @@ void move() {
   
   player_x += motion_x;
   player_y += motion_y;
-
-  // Wrap around map
-  
-  if (player_x <= 0) {
-    player_x += MAP_WIDTH*TILE_SIZE;
-    motion_x = 0;
-  }
-  else if (player_x >= MAP_WIDTH*TILE_SIZE) {
-    player_x -= MAP_WIDTH*TILE_SIZE;
-  }
-  if (player_y <= 0) {
-    player_y += MAP_HEIGHT*TILE_SIZE;
-    motion_y = 0;
-  }
-  else if (player_y > MAP_HEIGHT*TILE_SIZE) {
-    player_y -= MAP_HEIGHT*TILE_SIZE;
-  }
 }
 
 // Drawing

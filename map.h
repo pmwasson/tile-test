@@ -2,7 +2,7 @@ static const int MAP_WIDTH    = 8;
 static const int MAP_HEIGHT   = 10;
 static const int TILE_SIZE    = 128;
 static const int TILE_SIZE_M1 = (TILE_SIZE-1);
-static const int START_X      = 2*TILE_SIZE;
+static const int START_X      = 5*TILE_SIZE;
 static const int START_Y      = 7*TILE_SIZE;
 
 enum class Tile : char {
