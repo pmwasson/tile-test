@@ -3,6 +3,9 @@
 static const int PLAYER_HEIGHT = 24;
 static const int PLAYER_WIDTH = 16;
 
+static const int COLLISION_OFFSET_Y = PLAYER_HEIGHT/2;
+static const int COLLISION_OFFSET_X = PLAYER_WIDTH/2;
+
 const unsigned char PROGMEM lrm_plus_mask[] =
 {
 // width, height,
