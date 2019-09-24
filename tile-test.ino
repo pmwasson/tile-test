@@ -17,7 +17,7 @@ ArduboyTones sound(arduboy.audio.enabled);
 
 // Constants
 
-static const int MAX_MOTION = 3; 
+static const int MAX_MOTION = 5; 
 static const int MAX_FLOOR_MOTION = 2; 
 
 static const int COLLISION_NONE = 0;
@@ -102,86 +102,18 @@ void loop() {
   arduboy.display();
 }
 
-//// Player coordinate is for the upper-left corner of the screen,
-//// so must offset for detection
-//
-//// coordinate 0: floor = 64/2+24/2 = 32+12 = 44
-//// So want to check when player = 128 - 44 = 84
-//
-//void detectCollisions(Tile tiles[4]) {
-//  uint8_t delx = player_x & (TILE_SIZE-1);
-//  uint8_t dely = player_y & (TILE_SIZE-1);
-//
-//  collision = 0;  
-//  
-//  // Flat floor
-//  if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER)  &&  
-//     (((delx < CHECK_OFFSET_RIGHT) && isFloor(tiles[2]))  ||
-//      ((delx > CHECK_OFFSET_LEFT)  && isFloor(tiles[3])))) {
-//    collision |= COLLISION_FLOOR;
-//    player_y = (player_y & ~0x7f) + CHECK_FLOOR;
-//    dely = CHECK_FLOOR;
-//    motion_y = 0;
-//  }
-//  // Flat ceiling
-//  if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && 
-//     (((delx < CHECK_OFFSET_RIGHT) && isCeiling(tiles[0]))     ||
-//      ((delx > CHECK_OFFSET_LEFT)  && isCeiling(tiles[1]))))    {
-//    collision |= COLLISION_CEILING;
-//    player_y = (player_y & ~0x7f) + CHECK_CEILING;
-//    dely = CHECK_CEILING;
-//    motion_y = 0;
-//  }
-//  // Flat Right
-//  if ((delx >= CHECK_RIGHT) && (delx < CHECK_RIGHT+CHECK_BUFFER) && 
-//      (((dely < CHECK_CEILING) && isRight(tiles[1])) ||
-//       ((dely > CHECK_FLOOR)   && isRight(tiles[3])))) {
-//    collision |= COLLISION_RIGHT;
-//    player_x = (player_x & ~0x7f) + CHECK_RIGHT;
-//    delx = CHECK_RIGHT;
-//    motion_x = 0;
-//  }
-//  // Flat Left
-//  if ((delx <= CHECK_LEFT) && (delx > CHECK_LEFT-CHECK_BUFFER) && 
-//      (((dely < CHECK_CEILING) && isLeft(tiles[0])) ||
-//       ((dely > CHECK_FLOOR)   && isLeft(tiles[2])))) {
-//    collision |= COLLISION_LEFT;
-//    player_x = (player_x & ~0x7f) + CHECK_LEFT;
-//    delx = CHECK_LEFT;
-//    motion_x = 0;    
-//  }
-//
-//  // Lower Left
-//  if (((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx >= CHECK_LEFT) && (delx < 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[3])) ||
-//      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx - 128) && (delx >= 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[1])) ||
-//      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx < CHECK_LEFT) && isLowerLeft(tiles[0]))) {
-//    collision |= COLLISION_FLOOR | COLLISION_LEFT | COLLISION_SLANT;
-//    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f);
-//    dely = ((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f;
-//    motion_y = 0;
-//    motion_x = 0;
-//  }
-//  // Lower Right
-//  if (((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx <= CHECK_RIGHT) && isLowerRight(tiles[2])) ||
-//      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - (delx + 128)) && (delx <= (CHECK_FLOOR+CHECK_RIGHT)-128) && isLowerRight(tiles[0])) ||
-//      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx > CHECK_RIGHT) && isLowerRight(tiles[1]))) {
-//    collision |= COLLISION_FLOOR | COLLISION_RIGHT | COLLISION_SLANT;
-//    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR+CHECK_RIGHT) - delx) & 0x7f);
-//    dely = ((CHECK_FLOOR-CHECK_LEFT) - delx) & 0x7f;
-//    motion_y = 0;
-//    motion_x = 0;
-//  }
-//}
-
 // Player movement
 void movePlayer() {
   motion = 0;
   
   if (arduboy.pressed(RIGHT_BUTTON)) {
-    if (!(collision & COLLISION_RIGHT)) {
+    if (!(collision & COLLISION_RIGHT)|| (collision & COLLISION_SLANT)) {
       motion |= MOTION_RIGHT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = min(motion_x+1,MAX_FLOOR_MOTION);
+        if (collision & COLLISION_SLANT) {
+          motion_y = -1;
+        }
         walkSound(); 
       }
       else {
@@ -190,10 +122,13 @@ void movePlayer() {
     }
   }
   else if (arduboy.pressed(LEFT_BUTTON)) {
-    if (!(collision & COLLISION_LEFT)) {
+    if (!(collision & COLLISION_LEFT) || (collision & COLLISION_SLANT)) {
       motion |= MOTION_LEFT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = max(motion_x-1,-MAX_FLOOR_MOTION);
+        if (collision & COLLISION_SLANT) {
+          motion_y = -1;
+        }
         walkSound(); 
       }
       else {
@@ -203,8 +138,16 @@ void movePlayer() {
   }
   else if (collision & COLLISION_FLOOR) {
     if (collision & COLLISION_SLANT) {
-      motion_x = ((collision & COLLISION_LEFT) ? 1 : 0) + ((collision & COLLISION_RIGHT) ? -1 : 0);
-      if (motion_x) slideSound(); 
+      if (collision & COLLISION_LEFT) {
+        motion_x = 1;
+        motion |= MOTION_RIGHT;
+      }
+      else {
+        motion_x = -1;
+        motion |= MOTION_LEFT;
+      }
+      motion_y = 1;
+      slideSound(); 
     }
     else {
       motion_x = 0;
@@ -220,9 +163,7 @@ void movePlayer() {
     motion |= MOTION_DOWN;  
     motion_y = min(motion_y+1,MAX_MOTION);
   }
-  else {
-    motion_y = 0;
-  }
+
   player_x += motion_x;
   player_y += motion_y;
 
@@ -240,44 +181,86 @@ void movePlayer() {
 void checkDown(int x, int y) {
 
   Tile tile = readTile(x,y);
-  if (isFloor(tile) && !isEdge(x)) {
+  if (isFloor(tile) && nearMin(y)) {
     player_y -= y % TILE_SIZE;
     collision |= COLLISION_FLOOR;
     motion_y = 0;
   }
-
-//  arduboy.clear();
-//  arduboy.setCursor(0,0);
-//  arduboy.print(x/64);
-//  arduboy.print(",");
-//  arduboy.print(y/64);
-//  arduboy.print(",");
-//  arduboy.print(static_cast<uint8_t>(tile));
 }
 
 void checkUp(int x, int y) {
   Tile tile = readTile(x,y);
-  if (isCeiling(tile) && !isEdge(x)) {
+  if (isCeiling(tile) && nearMax(y)) {
     player_y += (TILE_SIZE - 1) - (y % TILE_SIZE);
     collision |= COLLISION_CEILING;
     motion_y = 0;
   }
 }
 
+void checkRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isRight(tile) && nearMin(x)) {
+    player_x -= x % TILE_SIZE;
+    collision |= COLLISION_RIGHT;
+    motion_x = 0;
+  }
+}
+
 void checkLeft(int x, int y) {
   Tile tile = readTile(x,y);
-  if (isLeft(tile) && !isEdge(y)) {
+  if (isLeft(tile) && nearMax(x)) {
     player_x += (TILE_SIZE - 1) - (x % TILE_SIZE);
     collision |= COLLISION_LEFT;
     motion_x = 0;
   }
 }
 
-void checkRight(int x, int y) {
+void checkLowerLeft(int x, int y) {
   Tile tile = readTile(x,y);
-  if (isRight(tile) && !isEdge(y)) {
-    player_x -= x % TILE_SIZE;
+  int diff = y%TILE_SIZE - x%TILE_SIZE;
+  if (isLowerLeft(tile) && (diff >= 0)) {
+    player_x += diff;
+    collision |= COLLISION_LEFT;
+    collision |= COLLISION_FLOOR;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+    motion_y = 0;
+  }
+}
+
+void checkLowerRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - (TILE_SIZE - 1 - x%TILE_SIZE);
+  if (isLowerRight(tile) && (diff >= 0)) {
+    player_x -= diff;
     collision |= COLLISION_RIGHT;
+    collision |= COLLISION_FLOOR;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+    motion_y = 0;
+  }
+}
+
+void checkUpperRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - x%TILE_SIZE;
+  if (isUpperRight(tile) && (diff <= 0)) {
+    player_x += diff-1;
+    collision |= COLLISION_RIGHT;
+    collision |= COLLISION_CEILING;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+  }
+}
+
+void checkUpperLeft(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - (TILE_SIZE - 1 - x%TILE_SIZE);
+  if (isUpperLeft(tile) && (diff <= 0)) {
+    player_x -= diff-1;
+    collision |= COLLISION_LEFT;
+    collision |= COLLISION_CEILING;
+    collision |= COLLISION_SLANT;
     motion_x = 0;
   }
 }
@@ -303,14 +286,18 @@ void detectCollisions() {
 
   collision = COLLISION_NONE;
   
-  checkUp(    playerLeft(),  playerUp());
-  checkUp(    playerRight(), playerUp());
-  checkDown(  playerLeft(),  playerDown());
-  checkDown(  playerRight(), playerDown());
-  checkLeft(  playerLeft(),  playerUp());
-  checkLeft(  playerLeft(),  playerDown());
-  checkRight( playerRight(), playerUp());
-  checkRight( playerRight(), playerDown());
+  checkUp(        playerLeft()+1,   playerUp());
+  checkUp(        playerRight()-1,  playerUp());
+  checkDown(      playerLeft()+1,   playerDown());
+  checkDown(      playerRight()-1,  playerDown());
+  checkLeft(      playerLeft(),     playerUp()+1);
+  checkLeft(      playerLeft(),     playerDown()-1);
+  checkRight(     playerRight(),    playerUp()+1);
+  checkRight(     playerRight(),    playerDown()-1);
+  checkLowerLeft( playerLeft()+1,   playerDown()-1);
+  checkLowerRight(playerRight()-1,  playerDown()-1);
+  checkUpperRight(playerRight()-1,  playerUp()+1);
+  checkUpperLeft( playerLeft()+1,   playerUp()+1);
 }
 
 

@@ -1,4 +1,4 @@
-static const int TILE_SIZE    = 64;
+static const int TILE_SIZE    = 32;
 static const int TILE_SIZE_M1 = (TILE_SIZE-1);
 
 enum class Tile : char {
@@ -49,22 +49,36 @@ bool isEdge(int d) {
   return (d % TILE_SIZE == 0) || (d % TILE_SIZE == TILE_SIZE_M1);
 }
 
-static const int MAP_WIDTH    = 8;
-static const int MAP_HEIGHT   = 10;
+bool nearMin(int d) {
+  return (d % TILE_SIZE < 8);
+}
 
-static const int START_X      = 2*TILE_SIZE + TILE_SIZE/2;
-static const int START_Y      = 7*TILE_SIZE + TILE_SIZE/2;
+bool nearMax(int d) {
+  return (d % TILE_SIZE > (TILE_SIZE-8));
+}
+
+static const int MAP_WIDTH    = 16;
+static const int MAP_HEIGHT   = 16;
+
+static const int START_X      = 7*TILE_SIZE + TILE_SIZE/2;
+static const int START_Y      = 4*TILE_SIZE + TILE_SIZE/2;
 
 const uint8_t PROGMEM tile_map[] =
 {
-  7,7,7,7,7,7,7,7,
-  7,1,1,1,1,1,1,7,
-  7,1,0,0,0,0,1,7,
-  7,1,0,5,4,0,1,7,
-  7,1,0,3,2,5,1,7,
-  7,1,0,0,0,3,1,7,
-  7,1,0,1,1,0,1,7,
-  7,1,0,0,0,0,1,7,
-  7,1,1,1,1,1,1,7,
-  7,7,7,7,7,7,7,7
+  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+  7,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,
+  7,1,1,2,0,0,0,0,0,0,0,0,3,1,1,7,
+  7,1,2,0,0,0,0,0,0,0,0,0,0,3,1,7,
+  7,1,0,0,0,0,0,0,0,0,0,0,0,0,1,7,
+  7,1,0,0,0,0,5,1,1,4,0,0,0,0,1,7,
+  7,1,0,0,0,5,1,1,1,1,4,0,0,0,1,7,
+  7,1,0,0,0,1,1,0,0,1,1,0,0,0,1,7,
+  7,1,0,0,0,1,1,0,0,1,1,0,0,0,1,7,
+  7,1,0,0,0,3,1,1,1,1,2,0,0,0,1,7,
+  7,1,0,0,0,0,3,1,1,2,0,0,0,0,1,7,
+  7,1,0,0,0,0,0,0,0,0,0,0,0,0,1,7,
+  7,1,4,0,0,0,0,0,0,0,0,0,0,5,1,7,
+  7,1,1,4,0,0,0,0,0,0,0,0,5,1,1,7,
+  7,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,
+  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7
 };
