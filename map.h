@@ -1,9 +1,5 @@
-static const int MAP_WIDTH    = 8;
-static const int MAP_HEIGHT   = 10;
-static const int TILE_SIZE    = 128;
+static const int TILE_SIZE    = 32;
 static const int TILE_SIZE_M1 = (TILE_SIZE-1);
-static const int START_X      = 5*TILE_SIZE;
-static const int START_Y      = 7*TILE_SIZE;
 
 enum class Tile : char {
   empty = 0,
@@ -12,7 +8,8 @@ enum class Tile : char {
   upperRight = 3,
   lowerLeft = 4,
   lowerRight = 5,
-  dirt = 6
+  fuel = 6,
+  dirt = 7
 };
 
 
@@ -48,16 +45,40 @@ bool isLowerRight(Tile t) {
   return (t == Tile::lowerRight);
 }
 
+bool isEdge(int d) {
+  return (d % TILE_SIZE == 0) || (d % TILE_SIZE == TILE_SIZE_M1);
+}
+
+bool nearMin(int d) {
+  return (d % TILE_SIZE < 8);
+}
+
+bool nearMax(int d) {
+  return (d % TILE_SIZE > (TILE_SIZE-8));
+}
+
+static const int MAP_WIDTH    = 16;
+static const int MAP_HEIGHT   = 16;
+
+static const int START_X      = 7*TILE_SIZE + TILE_SIZE/2;
+static const int START_Y      = 4*TILE_SIZE + TILE_SIZE/2;
+
 const uint8_t PROGMEM tile_map[] =
 {
-  1,1,1,1,1,1,1,1,
-  1,0,0,0,0,0,0,1,
-  1,0,1,1,1,1,0,1,
-  1,0,0,0,0,0,0,1,
-  1,0,0,5,4,0,0,1,
-  1,0,5,1,1,4,0,1,
-  1,4,0,0,0,0,5,1,
-  1,1,4,0,0,5,1,1,
-  1,1,1,1,1,1,1,1,
-  1,1,1,1,1,1,1,1
+  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+  7,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,
+  7,1,1,2,0,0,0,0,0,0,0,0,3,1,1,7,
+  7,1,2,0,0,0,0,0,0,0,0,0,0,3,1,7,
+  7,1,0,0,0,0,0,0,0,0,0,0,0,0,1,7,
+  7,1,0,0,0,0,5,1,1,4,0,0,0,0,1,7,
+  7,1,0,0,0,5,1,1,1,1,4,0,0,0,1,7,
+  7,1,0,0,0,1,1,0,0,1,1,0,0,0,1,7,
+  7,1,0,0,0,1,1,0,0,1,1,0,0,0,1,7,
+  7,1,0,0,0,3,1,1,1,1,2,0,0,0,1,7,
+  7,1,0,0,0,0,3,1,1,2,0,0,0,0,1,7,
+  7,1,0,0,0,0,0,0,0,0,0,0,0,0,1,7,
+  7,1,4,0,0,0,0,0,0,0,0,0,0,5,1,7,
+  7,1,1,4,0,0,0,0,0,0,0,0,5,1,1,7,
+  7,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,
+  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7
 };

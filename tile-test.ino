@@ -17,8 +17,8 @@ ArduboyTones sound(arduboy.audio.enabled);
 
 // Constants
 
-static const int MAX_MOTION = 5;
-static const int MAX_FLOOR_MOTION = 2;
+static const int MAX_MOTION = 5; 
+static const int MAX_FLOOR_MOTION = 2; 
 
 static const int COLLISION_NONE = 0;
 static const int COLLISION_FLOOR = 1;
@@ -33,15 +33,9 @@ static const int MOTION_DOWN = 2;
 static const int MOTION_RIGHT = 4;
 static const int MOTION_LEFT = 8;
 
-static const int CHECK_FLOOR = TILE_SIZE - (HEIGHT/2 + PLAYER_HEIGHT/2);   // 84
-static const int CHECK_CEILING = TILE_SIZE - (HEIGHT/2 - PLAYER_HEIGHT/2); // 108
-static const int CHECK_LEFT = (WIDTH/2 + PLAYER_WIDTH/2); // 72
-static const int CHECK_RIGHT = (WIDTH/2 - PLAYER_WIDTH/2); // 56
+static const int STARFIELD0 = 613;
+static const int STARFIELD1 = 3001;
 
-static const int CHECK_OFFSET_RIGHT = TILE_SIZE - (WIDTH/2 - PLAYER_WIDTH/2);
-static const int CHECK_OFFSET_LEFT = TILE_SIZE - (WIDTH/2 + PLAYER_WIDTH/2);
-static const int CHECK_BUFFER = 8;
-  
 // Globals
 
 int     player_x;
@@ -67,26 +61,14 @@ void setup() {
 
 // Game loop
 void loop() {
+
   // pause render until it's time for the next frame
   if (!(arduboy.nextFrame()))
     return;
 
   // Move character
-
-  move();
-  
-  // Read map data
-  
-  int map_pos = (player_x >> 7) + (player_y >> 7)*MAP_WIDTH;
-  
-  Tile tiles[4] = {
-    static_cast<Tile>(pgm_read_byte(tile_map+map_pos)),
-    static_cast<Tile>(pgm_read_byte(tile_map+map_pos+1)),
-    static_cast<Tile>(pgm_read_byte(tile_map+map_pos+MAP_WIDTH)),
-    static_cast<Tile>(pgm_read_byte(tile_map+map_pos+MAP_WIDTH+1))
-  };
-  
-  detectCollisions(tiles);
+  movePlayer();
+  detectCollisions();
 
   //----------------------
   // Render
@@ -94,115 +76,44 @@ void loop() {
 
   // Draw walls draws write the whole buffer, so no
   // clear is needed.
-  drawWalls(tiles);
+  drawWalls();
 
   // Draw background
 
-  drawStars(613,0);
-  drawStars(3001,1);
-    
-  // Draw player
-  
+  drawStars(STARFIELD0,0);
+  drawStars(STARFIELD1,1);
+     
   // Draw in center of screen
   drawPlayer();
   
   // Debug
   arduboy.setCursor(0, 28);
-  arduboy.print(player_x&0x7f);
+  arduboy.print(player_x%TILE_SIZE);
   arduboy.print(",");
   arduboy.print(motion_x);
   arduboy.setCursor(56, 0);
-  arduboy.print(player_y&0x7f);
+  arduboy.print(player_y%TILE_SIZE);
   arduboy.print(",");
   arduboy.print(motion_y);
   arduboy.setCursor(8*14, 28);
   arduboy.print(collision);
   
-//  Display results
-  
+  // Display results
   arduboy.display();
 }
 
-// Player coordinate is for the upper-left corner of the screen,
-// so must offset for detection
-
-// coordinate 0: floor = 64/2+24/2 = 32+12 = 44
-// So want to check when player = 128 - 44 = 84
-
-void detectCollisions(Tile tiles[4]) {
-  uint8_t delx = player_x & (TILE_SIZE-1);
-  uint8_t dely = player_y & (TILE_SIZE-1);
-
-  collision = 0;  
-  
-  // Flat floor
-  if ((dely >= CHECK_FLOOR) && (dely < CHECK_FLOOR+CHECK_BUFFER)  &&  
-     (((delx < CHECK_OFFSET_RIGHT) && isFloor(tiles[2]))  ||
-      ((delx > CHECK_OFFSET_LEFT)  && isFloor(tiles[3])))) {
-    collision |= COLLISION_FLOOR;
-    player_y = (player_y & ~0x7f) + CHECK_FLOOR;
-    dely = CHECK_FLOOR;
-    motion_y = 0;
-  }
-  // Flat ceiling
-  if ((dely <= CHECK_CEILING) && (dely > CHECK_CEILING-CHECK_BUFFER) && 
-     (((delx < CHECK_OFFSET_RIGHT) && isCeiling(tiles[0]))     ||
-      ((delx > CHECK_OFFSET_LEFT)  && isCeiling(tiles[1]))))    {
-    collision |= COLLISION_CEILING;
-    player_y = (player_y & ~0x7f) + CHECK_CEILING;
-    dely = CHECK_CEILING;
-    motion_y = 0;
-  }
-  // Flat Right
-  if ((delx >= CHECK_RIGHT) && (delx < CHECK_RIGHT+CHECK_BUFFER) && 
-      (((dely < CHECK_CEILING) && isRight(tiles[1])) ||
-       ((dely > CHECK_FLOOR)   && isRight(tiles[3])))) {
-    collision |= COLLISION_RIGHT;
-    player_x = (player_x & ~0x7f) + CHECK_RIGHT;
-    delx = CHECK_RIGHT;
-    motion_x = 0;
-  }
-  // Flat Left
-  if ((delx <= CHECK_LEFT) && (delx > CHECK_LEFT-CHECK_BUFFER) && 
-      (((dely < CHECK_CEILING) && isLeft(tiles[0])) ||
-       ((dely > CHECK_FLOOR)   && isLeft(tiles[2])))) {
-    collision |= COLLISION_LEFT;
-    player_x = (player_x & ~0x7f) + CHECK_LEFT;
-    delx = CHECK_LEFT;
-    motion_x = 0;    
-  }
-
-  // Lower Left
-  if (((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx >= CHECK_LEFT) && (delx < 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[3])) ||
-      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx - 128) && (delx >= 128-(CHECK_FLOOR-CHECK_LEFT)) && isLowerLeft(tiles[1])) ||
-      ((dely >= (CHECK_FLOOR-CHECK_LEFT) + delx) && (delx < CHECK_LEFT) && isLowerLeft(tiles[0]))) {
-    collision |= COLLISION_FLOOR | COLLISION_LEFT | COLLISION_SLANT;
-    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f);
-    dely = ((CHECK_FLOOR-CHECK_LEFT) + delx) & 0x7f;
-    motion_y = 0;
-    motion_x = 0;
-  }
-  // Lower Right
-  if (((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx <= CHECK_RIGHT) && isLowerRight(tiles[2])) ||
-      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - (delx + 128)) && (delx <= (CHECK_FLOOR+CHECK_RIGHT)-128) && isLowerRight(tiles[0])) ||
-      ((dely >= (CHECK_FLOOR+CHECK_RIGHT) - delx) && (delx > CHECK_RIGHT) && isLowerRight(tiles[1]))) {
-    collision |= COLLISION_FLOOR | COLLISION_RIGHT | COLLISION_SLANT;
-    player_y = (player_y & ~0x7f) + (((CHECK_FLOOR+CHECK_RIGHT) - delx) & 0x7f);
-    dely = ((CHECK_FLOOR-CHECK_LEFT) - delx) & 0x7f;
-    motion_y = 0;
-    motion_x = 0;
-  }
-}
-
-// Character movement
-void move() {
+// Player movement
+void movePlayer() {
   motion = 0;
   
   if (arduboy.pressed(RIGHT_BUTTON)) {
-    if (!(collision & COLLISION_RIGHT)) {
+    if (!(collision & COLLISION_RIGHT)|| (collision & COLLISION_SLANT)) {
       motion |= MOTION_RIGHT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = min(motion_x+1,MAX_FLOOR_MOTION);
+        if (collision & COLLISION_SLANT) {
+          motion_y = -1;
+        }
         walkSound(); 
       }
       else {
@@ -211,10 +122,13 @@ void move() {
     }
   }
   else if (arduboy.pressed(LEFT_BUTTON)) {
-    if (!(collision & COLLISION_LEFT)) {
+    if (!(collision & COLLISION_LEFT) || (collision & COLLISION_SLANT)) {
       motion |= MOTION_LEFT;  
       if (collision & COLLISION_FLOOR) {
         motion_x = max(motion_x-1,-MAX_FLOOR_MOTION);
+        if (collision & COLLISION_SLANT) {
+          motion_y = -1;
+        }
         walkSound(); 
       }
       else {
@@ -224,8 +138,16 @@ void move() {
   }
   else if (collision & COLLISION_FLOOR) {
     if (collision & COLLISION_SLANT) {
-      motion_x = ((collision & COLLISION_LEFT) ? 1 : 0) + ((collision & COLLISION_RIGHT) ? -1 : 0);
-      if (motion_x) slideSound(); 
+      if (collision & COLLISION_LEFT) {
+        motion_x = 1;
+        motion |= MOTION_RIGHT;
+      }
+      else {
+        motion_x = -1;
+        motion |= MOTION_LEFT;
+      }
+      motion_y = 1;
+      slideSound(); 
     }
     else {
       motion_x = 0;
@@ -241,16 +163,150 @@ void move() {
     motion |= MOTION_DOWN;  
     motion_y = min(motion_y+1,MAX_MOTION);
   }
-  else {
-    motion_y = 0;
-  }
-  
+
   player_x += motion_x;
   player_y += motion_y;
+
+  // Hard boundaries for bad maps
+  player_x = max(player_x,TILE_SIZE/2);
+  player_x = min(player_x,TILE_SIZE*MAP_WIDTH-TILE_SIZE/2);
+  player_y = max(player_y,TILE_SIZE/2);
+  player_y = min(player_y,TILE_SIZE*MAP_HEIGHT-TILE_SIZE/2);
+  
 }
+
+// Collision Dection
+//---------------------------
+
+void checkDown(int x, int y) {
+
+  Tile tile = readTile(x,y);
+  if (isFloor(tile) && nearMin(y)) {
+    player_y -= y % TILE_SIZE;
+    collision |= COLLISION_FLOOR;
+    motion_y = 0;
+  }
+}
+
+void checkUp(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isCeiling(tile) && nearMax(y)) {
+    player_y += (TILE_SIZE - 1) - (y % TILE_SIZE);
+    collision |= COLLISION_CEILING;
+    motion_y = 0;
+  }
+}
+
+void checkRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isRight(tile) && nearMin(x)) {
+    player_x -= x % TILE_SIZE;
+    collision |= COLLISION_RIGHT;
+    motion_x = 0;
+  }
+}
+
+void checkLeft(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isLeft(tile) && nearMax(x)) {
+    player_x += (TILE_SIZE - 1) - (x % TILE_SIZE);
+    collision |= COLLISION_LEFT;
+    motion_x = 0;
+  }
+}
+
+void checkLowerLeft(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - x%TILE_SIZE;
+  if (isLowerLeft(tile) && (diff >= 0)) {
+    player_x += diff;
+    collision |= COLLISION_LEFT;
+    collision |= COLLISION_FLOOR;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+    motion_y = 0;
+  }
+}
+
+void checkLowerRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - (TILE_SIZE - 1 - x%TILE_SIZE);
+  if (isLowerRight(tile) && (diff >= 0)) {
+    player_x -= diff;
+    collision |= COLLISION_RIGHT;
+    collision |= COLLISION_FLOOR;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+    motion_y = 0;
+  }
+}
+
+void checkUpperRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - x%TILE_SIZE;
+  if (isUpperRight(tile) && (diff <= 0)) {
+    player_x += diff-1;
+    collision |= COLLISION_RIGHT;
+    collision |= COLLISION_CEILING;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+  }
+}
+
+void checkUpperLeft(int x, int y) {
+  Tile tile = readTile(x,y);
+  int diff = y%TILE_SIZE - (TILE_SIZE - 1 - x%TILE_SIZE);
+  if (isUpperLeft(tile) && (diff <= 0)) {
+    player_x -= diff-1;
+    collision |= COLLISION_LEFT;
+    collision |= COLLISION_CEILING;
+    collision |= COLLISION_SLANT;
+    motion_x = 0;
+  }
+}
+
+int playerUp() {
+  return player_y - PLAYER_HEIGHT/2 - 1;
+}
+
+int playerDown() {
+  return player_y + PLAYER_HEIGHT/2;
+}
+
+int playerLeft() {
+  return player_x - PLAYER_WIDTH/2 - 1;
+}
+
+int playerRight() {
+  return player_x + PLAYER_WIDTH/2;
+}
+
+// Create 4 points outside but bounding player
+void detectCollisions() {
+
+  collision = COLLISION_NONE;
+  
+  checkUp(        playerLeft()+1,   playerUp());
+  checkUp(        playerRight()-1,  playerUp());
+  checkDown(      playerLeft()+1,   playerDown());
+  checkDown(      playerRight()-1,  playerDown());
+  checkLeft(      playerLeft(),     playerUp()+1);
+  checkLeft(      playerLeft(),     playerDown()-1);
+  checkRight(     playerRight(),    playerUp()+1);
+  checkRight(     playerRight(),    playerDown()-1);
+  checkLowerLeft( playerLeft()+1,   playerDown()-1);
+  checkLowerRight(playerRight()-1,  playerDown()-1);
+  checkUpperRight(playerRight()-1,  playerUp()+1);
+  checkUpperLeft( playerLeft()+1,   playerUp()+1);
+}
+
 
 // Drawing
 //---------------------------
+
+Tile readTile(int x, int y) {
+  return static_cast<Tile>(pgm_read_byte(tile_map + (x/TILE_SIZE) + (y/TILE_SIZE)*MAP_WIDTH));
+}
 
 // Calculate bits based on location within tile
 uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
@@ -274,25 +330,29 @@ uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
   return 0x55<<((x^y)&1);
 }
 
-// Tile order
-// 0 1
-// 2 3
+void drawWalls() {
+      
+  int xoffset, yoffset;  
+  int mxoffset = player_x - WIDTH/2;
+  int myoffset = player_y - HEIGHT/2;
 
-void drawWalls(Tile tiles[4]) {
-  uint8_t delx = player_x & (TILE_SIZE-1);
-  uint8_t dely = player_y & (TILE_SIZE-1);
-  int xswitch = 128-delx;
-  int yswitch = 128-dely;
-  for (int y=0; y < 64; y += 8) {
-    for (int x=0; x < 128; x += 1) {
-      size_t idx = (x < xswitch ? 0 : 1) +
-                   (y < yswitch ? 0 : 2) ;
-      uint8_t bits = tileBits(tiles[idx],x + delx - (idx&1 ? 128 : 0), y + dely - (idx&2 ? 128 : 0));
-      if ((y < yswitch) && ((y + 8) > yswitch)) {
-        uint8_t mask = 0xff >> (8 - (yswitch - y));
-        bits = (mask&bits) | (~mask & (tileBits(tiles[idx+2],x + delx - (idx&1 ? 128 : 0), y + dely - 128)));
+  for (int ty = 0; ty < HEIGHT; ty += yoffset) {
+    yoffset = ty ? TILE_SIZE : TILE_SIZE - myoffset % TILE_SIZE;
+    
+    for (int tx = 0; tx < WIDTH; tx += tx ? TILE_SIZE : xoffset) {
+      xoffset = tx ? TILE_SIZE : TILE_SIZE - mxoffset % TILE_SIZE;
+
+      // Convert to map coordinates
+      Tile tile = readTile(tx+mxoffset,ty+myoffset);
+            
+      for (int y = ty; y < min(HEIGHT,ty+yoffset); y += 8-y%8) {
+        for (int x = tx; x < min(WIDTH,tx+xoffset); x += 1) {
+          int offset = (y/8)*WIDTH+x;
+          int mask = 0xff << y %8;
+          int bits = tileBits(tile,(x+mxoffset)%TILE_SIZE,(y+myoffset)%TILE_SIZE) << y%8;
+          arduboy.sBuffer[offset] = arduboy.sBuffer[offset]&~mask | (bits&mask);
+        }
       }
-      arduboy.sBuffer[x+y*16] = bits;
     }
   }
 }
@@ -310,7 +370,7 @@ void drawPlayer() {
       frame = 2+animation;
     }
   }
-  sprites.drawPlusMask((WIDTH/2)-(16/2),(HEIGHT/2)-(24/2),lrm_plus_mask,frame);
+  sprites.drawPlusMask((WIDTH/2)-(PLAYER_WIDTH/2),(HEIGHT/2)-(PLAYER_HEIGHT/2),lrm_plus_mask,frame);
 }
 
 void drawStars(uint16_t seed, uint8_t layer) {
