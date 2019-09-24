@@ -17,8 +17,8 @@ ArduboyTones sound(arduboy.audio.enabled);
 
 // Constants
 
-static const int MAX_MOTION = 5;
-static const int MAX_FLOOR_MOTION = 2;
+static const int MAX_MOTION = 3; 
+static const int MAX_FLOOR_MOTION = 2; 
 
 static const int COLLISION_NONE = 0;
 static const int COLLISION_FLOOR = 1;
@@ -68,7 +68,7 @@ void loop() {
 
   // Move character
   movePlayer();
-  //detectCollisions();
+  detectCollisions();
 
   //----------------------
   // Render
@@ -87,16 +87,16 @@ void loop() {
   drawPlayer();
   
   // Debug
-//  arduboy.setCursor(0, 28);
-//  arduboy.print(player_x&0x7f);
-//  arduboy.print(",");
-//  arduboy.print(motion_x);
-//  arduboy.setCursor(56, 0);
-//  arduboy.print(player_y&0x7f);
-//  arduboy.print(",");
-//  arduboy.print(motion_y);
-//  arduboy.setCursor(8*14, 28);
-//  arduboy.print(collision);
+  arduboy.setCursor(0, 28);
+  arduboy.print(player_x%TILE_SIZE);
+  arduboy.print(",");
+  arduboy.print(motion_x);
+  arduboy.setCursor(56, 0);
+  arduboy.print(player_y%TILE_SIZE);
+  arduboy.print(",");
+  arduboy.print(motion_y);
+  arduboy.setCursor(8*14, 28);
+  arduboy.print(collision);
   
   // Display results
   arduboy.display();
@@ -223,16 +223,96 @@ void movePlayer() {
   else {
     motion_y = 0;
   }
-  //player_x += motion_x;
-  //player_y += motion_y;
+  player_x += motion_x;
+  player_y += motion_y;
 
   // Hard boundaries for bad maps
-  //player_x = min(player_x,TILE_SIZE/2);
-  //player_x = max(player_x,TILE_SIZE*MAP_WIDTH-TILE_SIZE/2);
-  //player_y = min(player_y,TILE_SIZE/2);
-  //player_y = max(player_y,TILE_SIZE*MAP_HEIGHT-TILE_SIZE/2);
+  player_x = max(player_x,TILE_SIZE/2);
+  player_x = min(player_x,TILE_SIZE*MAP_WIDTH-TILE_SIZE/2);
+  player_y = max(player_y,TILE_SIZE/2);
+  player_y = min(player_y,TILE_SIZE*MAP_HEIGHT-TILE_SIZE/2);
   
 }
+
+// Collision Dection
+//---------------------------
+
+void checkDown(int x, int y) {
+
+  Tile tile = readTile(x,y);
+  if (isFloor(tile) && !isEdge(x)) {
+    player_y -= y % TILE_SIZE;
+    collision |= COLLISION_FLOOR;
+    motion_y = 0;
+  }
+
+//  arduboy.clear();
+//  arduboy.setCursor(0,0);
+//  arduboy.print(x/64);
+//  arduboy.print(",");
+//  arduboy.print(y/64);
+//  arduboy.print(",");
+//  arduboy.print(static_cast<uint8_t>(tile));
+}
+
+void checkUp(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isCeiling(tile) && !isEdge(x)) {
+    player_y += (TILE_SIZE - 1) - (y % TILE_SIZE);
+    collision |= COLLISION_CEILING;
+    motion_y = 0;
+  }
+}
+
+void checkLeft(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isLeft(tile) && !isEdge(y)) {
+    player_x += (TILE_SIZE - 1) - (x % TILE_SIZE);
+    collision |= COLLISION_LEFT;
+    motion_x = 0;
+  }
+}
+
+void checkRight(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isRight(tile) && !isEdge(y)) {
+    player_x -= x % TILE_SIZE;
+    collision |= COLLISION_RIGHT;
+    motion_x = 0;
+  }
+}
+
+int playerUp() {
+  return player_y - PLAYER_HEIGHT/2 - 1;
+}
+
+int playerDown() {
+  return player_y + PLAYER_HEIGHT/2;
+}
+
+int playerLeft() {
+  return player_x - PLAYER_WIDTH/2 - 1;
+}
+
+int playerRight() {
+  return player_x + PLAYER_WIDTH/2;
+}
+
+// Create 4 points outside but bounding player
+void detectCollisions() {
+
+  collision = COLLISION_NONE;
+  
+  checkUp(    playerLeft(),  playerUp());
+  checkUp(    playerRight(), playerUp());
+  checkDown(  playerLeft(),  playerDown());
+  checkDown(  playerRight(), playerDown());
+  checkLeft(  playerLeft(),  playerUp());
+  checkLeft(  playerLeft(),  playerDown());
+  checkRight( playerRight(), playerUp());
+  checkRight( playerRight(), playerDown());
+}
+
 
 // Drawing
 //---------------------------
@@ -263,59 +343,27 @@ uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
   return 0x55<<((x^y)&1);
 }
 
-void drawWalls() {  
-  arduboy.clear();
+void drawWalls() {
+      
+  int xoffset, yoffset;  
+  int mxoffset = player_x - WIDTH/2;
+  int myoffset = player_y - HEIGHT/2;
 
-  // Align to top of screen, but then increment by tile size
-  for (int ty = player_y - HEIGHT/2; ty < player_y + HEIGHT/2; ty += TILE_SIZE - ty % TILE_SIZE) {
-
-    int ymax = min(ty + TILE_SIZE - (ty % TILE_SIZE),player_y + HEIGHT/2);
-
-    // Convert to screen coordinates
-    int sy = ty - (player_y - HEIGHT/2);
-    int symax = ymax - (player_y - HEIGHT/2);
+  for (int ty = 0; ty < HEIGHT; ty += yoffset) {
+    yoffset = ty ? TILE_SIZE : TILE_SIZE - myoffset % TILE_SIZE;
     
-    for (int tx = player_x - WIDTH/2; tx < player_x + WIDTH/2; tx += TILE_SIZE - tx % TILE_SIZE) {
-      int xmax = min(tx + TILE_SIZE - (tx % TILE_SIZE),player_x + WIDTH/2);
+    for (int tx = 0; tx < WIDTH; tx += tx ? TILE_SIZE : xoffset) {
+      xoffset = tx ? TILE_SIZE : TILE_SIZE - mxoffset % TILE_SIZE;
 
-      Tile tile = readTile(tx,ty);
-
-      // Convert to screen coordinates
-      int sx = tx - (player_x - WIDTH/2);
-      int sxmax = xmax - (player_x - WIDTH/2);
-
-//      arduboy.setCursor(sx,sy);
-//      arduboy.print(static_cast<uint8_t>(tile));
-//
-//      for (int x = sx; x < sx+8; x++) {
-//        int offset = x+(sy/8)*WIDTH;
-//        if (sy%8==0) {
-//          arduboy.sBuffer[offset] |= 0xff; 
-//        }
-//        else {
-//          arduboy.sBuffer[offset] |= 0xff<<(sy%8);           
-//          arduboy.sBuffer[offset+WIDTH] |= 0xff>>(8-sy%8);           
-//        }
-//      }
-
-
-      // Get y aligned to screen bytes
-      for (int y = sy; y < symax; y += 8 - y % 8) {
-        
-        bool mergeTop    = (y % TILE_SIZE > 0) && (y % TILE_SIZE < 8);
-        // Don't need a merge bottom, since extra bits will get overwritten
-
-        for (int x = sx; x < sxmax; x += 1) {
-          // Get tile bit pattern
-          uint8_t bits = tileBits(tile,(x+player_x) % TILE_SIZE, (y+player_y) % TILE_SIZE);
-          
-          int offset = x + (y/8)*16;
-          
-          if (mergeTop) {
-            uint8_t mask = 0xff >> y % 8;
-            bits = (arduboy.sBuffer[offset] & mask) | (bits & ~mask);
-          }
-          arduboy.sBuffer[offset] = bits;
+      // Convert to map coordinates
+      Tile tile = readTile(tx+mxoffset,ty+myoffset);
+            
+      for (int y = ty; y < min(HEIGHT,ty+yoffset); y += 8-y%8) {
+        for (int x = tx; x < min(WIDTH,tx+xoffset); x += 1) {
+          int offset = (y/8)*WIDTH+x;
+          int mask = 0xff << y %8;
+          int bits = tileBits(tile,(x+mxoffset)%TILE_SIZE,(y+myoffset)%TILE_SIZE) << y%8;
+          arduboy.sBuffer[offset] = arduboy.sBuffer[offset]&~mask | (bits&mask);
         }
       }
     }
