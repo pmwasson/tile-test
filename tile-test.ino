@@ -26,6 +26,7 @@ static const int COLLISION_CEILING = 2;
 static const int COLLISION_RIGHT = 4;
 static const int COLLISION_LEFT = 8;
 static const int COLLISION_SLANT = 16;
+static const int COLLISION_FUEL = 32;
 
 static const int MOTION_NONE = 0;
 static const int MOTION_UP = 1;
@@ -36,6 +37,8 @@ static const int MOTION_LEFT = 8;
 static const int STARFIELD0 = 613;
 static const int STARFIELD1 = 3001;
 
+static const int MAX_FUEL = 100 << 4;
+
 // Globals
 
 int     player_x;
@@ -44,6 +47,10 @@ int8_t  motion_x;
 int8_t  motion_y;
 uint8_t collision;
 uint8_t motion;
+bool    draw_fuel;
+int     fuel_x;
+int     fuel_y;
+int     fuel;
 
 // Setup
 void setup() {
@@ -57,6 +64,7 @@ void setup() {
   motion_y = 0;
   collision = COLLISION_NONE;
   motion = MOTION_NONE;
+  fuel = 0;
 }
 
 // Game loop
@@ -85,18 +93,24 @@ void loop() {
      
   // Draw in center of screen
   drawPlayer();
-  
+  drawFuel();
+
+  arduboy.setCursor(0, 0);
+  arduboy.print("FUEL: ");
+  arduboy.print(fuel>>4);
+  arduboy.print("%");
+
   // Debug
-  arduboy.setCursor(0, 28);
-  arduboy.print(player_x%TILE_SIZE);
-  arduboy.print(",");
-  arduboy.print(motion_x);
-  arduboy.setCursor(56, 0);
-  arduboy.print(player_y%TILE_SIZE);
-  arduboy.print(",");
-  arduboy.print(motion_y);
-  arduboy.setCursor(8*14, 28);
-  arduboy.print(collision);
+//  arduboy.setCursor(0, 28);
+//  arduboy.print(player_x%TILE_SIZE);
+//  arduboy.print(",");
+//  arduboy.print(motion_x);
+//  arduboy.setCursor(56, 0);
+//  arduboy.print(player_y%TILE_SIZE);
+//  arduboy.print(",");
+//  arduboy.print(motion_y);
+//  arduboy.setCursor(8*14, 28);
+//  arduboy.print(collision);
   
   // Display results
   arduboy.display();
@@ -154,10 +168,11 @@ void movePlayer() {
     }
   }
   
-  if (arduboy.pressed(B_BUTTON)) {
+  if (arduboy.pressed(B_BUTTON) && (fuel > 0)) {
     motion |= MOTION_UP;  
     flySound();
     motion_y = max(motion_y-1,-MAX_MOTION);
+    decreaseFuel();
   }
   else if (!(collision & COLLISION_FLOOR)) {
     motion |= MOTION_DOWN;  
@@ -265,6 +280,14 @@ void checkUpperLeft(int x, int y) {
   }
 }
 
+void checkFuel(int x, int y) {
+  Tile tile = readTile(x,y);
+  if (isFuel(tile) && nearMax(y) && nearCenter(x)) {
+    collision |= COLLISION_FUEL;
+  }
+  
+}
+
 int playerUp() {
   return player_y - PLAYER_HEIGHT/2 - 1;
 }
@@ -298,6 +321,7 @@ void detectCollisions() {
   checkLowerRight(playerRight()-1,  playerDown()-1);
   checkUpperRight(playerRight()-1,  playerUp()+1);
   checkUpperLeft( playerLeft()+1,   playerUp()+1);
+  checkFuel(      player_x,         playerDown()-1);
 }
 
 
@@ -311,7 +335,8 @@ Tile readTile(int x, int y) {
 // Calculate bits based on location within tile
 uint8_t tileBits(Tile tile, int8_t x, int8_t y) {
   switch(tile) {
-    case Tile::empty:       return 0x00;
+    case Tile::empty:
+    case Tile::fuel:        return 0x00;
     case Tile::wall:        return 0xff;
     case Tile::lowerLeft:   return x < y   ? 0xff  :
                                    x < y+8 ? 0xff << (x-y)  :
@@ -336,6 +361,8 @@ void drawWalls() {
   int mxoffset = player_x - WIDTH/2;
   int myoffset = player_y - HEIGHT/2;
 
+  draw_fuel = false;
+  
   for (int ty = 0; ty < HEIGHT; ty += yoffset) {
     yoffset = ty ? TILE_SIZE : TILE_SIZE - myoffset % TILE_SIZE;
     
@@ -344,6 +371,14 @@ void drawWalls() {
 
       // Convert to map coordinates
       Tile tile = readTile(tx+mxoffset,ty+myoffset);
+
+      // Check for fuel (but draw later)
+      // map constrained to only have 1 visible at a time.
+      if (tile == Tile::fuel) {
+        draw_fuel = true;
+        fuel_x = ((tx+ mxoffset)/TILE_SIZE)*TILE_SIZE;
+        fuel_y = ((ty+ myoffset)/TILE_SIZE)*TILE_SIZE;
+      }
             
       for (int y = ty; y < min(HEIGHT,ty+yoffset); y += 8-y%8) {
         for (int x = tx; x < min(WIDTH,tx+xoffset); x += 1) {
@@ -381,6 +416,24 @@ void drawStars(uint16_t seed, uint8_t layer) {
   }
 }
 
+void drawFuel() {
+  int x = fuel_x - player_x + WIDTH/2 + TILE_SIZE/2 - FUEL_WIDTH/2;
+  int y = fuel_y - player_y + HEIGHT/2 + TILE_SIZE - FUEL_HEIGHT;
+  
+  if (draw_fuel) {
+    if (collision & COLLISION_FUEL) {
+      sprites.drawPlusMask(x,y,fuel_plus_mask,(arduboy.frameCount>>3) & 3);
+      if (fuel < MAX_FUEL) {
+        increaseFuel();
+        fuelSound();
+      }
+    }
+    else {
+      sprites.drawPlusMask(x,y,fuel_plus_mask,0);      
+    }
+  }
+}
+
 // Sounds
 //-------------------------------------------
 
@@ -392,7 +445,12 @@ void walkSound() {
 
 void flySound() {
   if (!sound.playing()) {
-    sound.tone(NOTE_C2H,60, NOTE_A2H,30); 
+    if (fuel > (10<<4)) {
+      sound.tone(NOTE_C2H,60, NOTE_A2H,30);
+    }
+    else { 
+      sound.tone(NOTE_D2H,60, NOTE_REST,30);
+    }
   }
 }
 
@@ -400,4 +458,18 @@ void slideSound() {
   if (!sound.playing()) {
     sound.tone(NOTE_D2,30, NOTE_A1,30); 
   }
+}
+
+void fuelSound() {
+  if (!sound.playing()) {
+    sound.tone(NOTE_C3H,150, NOTE_E3H,150, NOTE_G3H,150); 
+  }
+}
+
+void increaseFuel() {
+  fuel = min(fuel+10,MAX_FUEL);
+}
+
+void decreaseFuel() {
+  fuel = max(fuel-2,0);
 }
