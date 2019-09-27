@@ -417,8 +417,8 @@ void drawStars(uint16_t seed, uint8_t layer) {
 }
 
 void drawFuel() {
-  int x = fuel_x - player_x + WIDTH/2 + TILE_SIZE/2 - FUEL_WIDTH/2;
-  int y = fuel_y - player_y + HEIGHT/2 + TILE_SIZE - FUEL_HEIGHT;
+  int x = fuel_x - player_x + (WIDTH/2 + TILE_SIZE/2 - FUEL_WIDTH/2); // Horizontal center of tile
+  int y = fuel_y - player_y + (HEIGHT/2 + TILE_SIZE - FUEL_HEIGHT);   // Bottom of tile
   
   if (draw_fuel) {
     if (collision & COLLISION_FUEL) {
