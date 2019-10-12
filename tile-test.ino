@@ -17,6 +17,11 @@ ArduboyTones sound(arduboy.audio.enabled);
 
 // Constants
 
+static const int MODE_COLD_OPEN = 0; 
+static const int MODE_ROCKET_DOWN = 1; 
+static const int MODE_CRASH = 2; 
+static const int MODE_GAME = 10; 
+
 static const int MAX_MOTION = 5; 
 static const int MAX_FLOOR_MOTION = 2; 
 
@@ -41,6 +46,7 @@ static const int MAX_FUEL = 100 << 4;
 
 // Globals
 
+int8_t  game_mode;
 int     player_x;
 int     player_y;
 int8_t  motion_x;
@@ -57,23 +63,117 @@ void setup() {
   // initiate arduboy instance
   arduboy.begin();
   arduboy.setFrameRate(60);
+  
+  // Title sequence: Part 1
+  resetGame(MODE_COLD_OPEN);
+}
 
-  player_x = START_X;
-  player_y = START_Y;
+// Main loop
+void loop() {
+  // pause render until it's time for the next frame
+  if (!(arduboy.nextFrame()))
+    return;
+    
+  if (game_mode == MODE_GAME) 
+    gameLoop();
+  else if ((game_mode == MODE_COLD_OPEN) || (game_mode == MODE_ROCKET_DOWN))
+    coldOpenLoop();
+  else
+    crashLoop();
+      
+  // Display results
+  arduboy.display();
+}
+
+// Title sequence
+// Part 1: cold-open
+void coldOpenLoop() {
+  arduboy.pollButtons();
+  arduboy.clear();
+  drawStars(STARFIELD0,0);
+  drawStars(STARFIELD1,1);
+  drawRocket(motion_y>>1);
+  flySound();
+  
+  player_x += 5;
+  if (game_mode == MODE_ROCKET_DOWN) {
+    motion_y += 1;
+    if ((motion_y > 120) || anyButton()) {
+
+      // Title sequence: Part 2
+      resetGame(MODE_CRASH);
+    }
+  }
+  
+  if (arduboy.pressed(UP_BUTTON)) {
+    player_y -= 1;
+  }
+  if (arduboy.pressed(DOWN_BUTTON)) {
+    player_y += 1;
+  }
+  if (anyButton()) {
+    game_mode = MODE_ROCKET_DOWN;
+    fuel = 0;    
+  }
+
+  if (game_mode == MODE_COLD_OPEN) {
+    int x = (player_x >> 4) & 0x1ff;
+    arduboy.setCursor(256-x, 56);
+    arduboy.print("Press a button to CRASH!");
+  }
+}
+
+// Part 2: Crash!
+void crashLoop() {
+  arduboy.pollButtons();
+  drawWalls();
+  drawStars(STARFIELD0,0);
+  drawStars(STARFIELD1,1);
+  drawRocket(0);
+    
+  if (player_y < TILE_SIZE*2-8) {
+    flySound();
+    player_x += 4;
+    player_y += ((player_x & 4) == 0);
+  }
+  else {
+    if (motion_x < 64) {
+      sprites.drawPlusMask((WIDTH/2)-(PLAYER_WIDTH/2)+motion_x,(HEIGHT/2)-(PLAYER_HEIGHT/2)+motion_y,lrm_plus_mask,0);
+      motion_x += 2;
+      motion_y += (motion_x-20)>>2;
+    }
+    else {
+      fuel += 2;
+      if (fuel > 1200) {
+        fuel = 0;
+      }
+      arduboy.setCursor(300-fuel, 0);
+      arduboy.print("Oh no! Little Rocket Man has been thrown from his rocket into a deep hole. Help him find his way back to the ship.  Press any button to start.");
+    }
+  }
+  
+  if (anyButton()) {
+    resetGame(MODE_GAME);
+  }
+}
+
+bool anyButton() {
+  return arduboy. justPressed(B_BUTTON) || arduboy. justPressed(A_BUTTON);
+}
+
+void resetGame(uint8_t new_mode) {
+  game_mode = new_mode;
+  player_x = (game_mode == MODE_CRASH) ? TILE_SIZE*3-28 : START_X;
+  player_y = (game_mode == MODE_CRASH) ? 32             : START_Y;
   motion_x = 0;
   motion_y = 0;
   collision = COLLISION_NONE;
   motion = MOTION_NONE;
-  fuel = 0;
+  fuel = (game_mode == MODE_COLD_OPEN) ? MAX_FUEL : 0;
 }
 
-// Game loop
-void loop() {
 
-  // pause render until it's time for the next frame
-  if (!(arduboy.nextFrame()))
-    return;
-
+void gameLoop() {
   // Move character
   movePlayer();
   detectCollisions();
@@ -111,9 +211,7 @@ void loop() {
 //  arduboy.print(motion_y);
 //  arduboy.setCursor(8*14, 28);
 //  arduboy.print(collision);
-  
-  // Display results
-  arduboy.display();
+
 }
 
 // Player movement
@@ -177,6 +275,11 @@ void movePlayer() {
   else if (!(collision & COLLISION_FLOOR)) {
     motion |= MOTION_DOWN;  
     motion_y = min(motion_y+1,MAX_MOTION);
+  }
+
+  // FIXME: REMOVE!
+  if (arduboy.pressed(A_BUTTON)) {
+    resetGame(MODE_COLD_OPEN);
   }
 
   player_x += motion_x;
@@ -406,6 +509,10 @@ void drawPlayer() {
     }
   }
   sprites.drawPlusMask((WIDTH/2)-(PLAYER_WIDTH/2),(HEIGHT/2)-(PLAYER_HEIGHT/2),lrm_plus_mask,frame);
+}
+
+void drawRocket(int y) {
+    sprites.drawPlusMask((WIDTH/2)-(ROCKET_WIDTH/2),(HEIGHT/2)-(ROCKET_HEIGHT/2)+y,rocket_plus_mask,0);
 }
 
 void drawStars(uint16_t seed, uint8_t layer) {

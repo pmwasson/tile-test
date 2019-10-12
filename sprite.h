@@ -75,6 +75,9 @@ const unsigned char PROGMEM fuel_plus_mask[] =
 };
 
 
+static const int ROCKET_HEIGHT = 40;
+static const int ROCKET_WIDTH = 58;
+
 const unsigned char PROGMEM rocket_plus_mask[] =
 {
 // width, height,
