@@ -180,7 +180,7 @@ void movePlayer() {
   }
 
   player_x += motion_x;
-  player_y += motion_y;
+  player_y = max(player_y+motion_y,TILE_SIZE);  // Minimum Y
 
   // Hard boundaries for bad maps
   player_x = max(player_x,TILE_SIZE/2);
